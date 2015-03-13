@@ -43,6 +43,12 @@ public class CommandDaoPiratteImpl implements CommandDao{
             execute(command, "easier-revoke");
         }
     }
+    
+     @Override
+    public void remove(String filename) throws CommandFailedException {
+         String[] command = {"shred", "-f", "-u", filename};
+         execute(command, "shred");
+    }
          
     
     @Override

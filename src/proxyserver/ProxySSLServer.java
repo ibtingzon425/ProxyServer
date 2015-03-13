@@ -5,17 +5,7 @@
  */
 package proxyserver;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PrintWriter;
+import java.io.*;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -41,17 +31,22 @@ public class ProxySSLServer implements Runnable{
     private final char[] PWD;
     private final File PUB_KEY;
     private final File MASTER_KEY;
-    
-    private CommandDaoPiratteImpl cmd = new CommandDaoPiratteImpl();
+    private final CommandDaoPiratteImpl cmd;
     
     //TODO find a way for the KGC to send PK and MK to Proxy Server without it getting messy. 
     
-    public ProxySSLServer(int port, String keystore, char[] pwd) {
+    public ProxySSLServer(int port, String keystore, char[] password, String pubkey, String masterkey) {
+        keystore = System.getProperty("user.dir") + "/SSLkeys/server.jks";
+        password = "password".toCharArray();
+        File pk = new File(pubkey);
+        File mk = new File(masterkey);
+        
+        this.cmd = new CommandDaoPiratteImpl();
         this.PORT = port;
-        this.KEYSTORE = System.getProperty("user.dir") + "/SSLkeys/server.jks";
-        this.PWD = "password".toCharArray();
-        this.PUB_KEY = new File("pk");
-        this.MASTER_KEY = new File("mk");      
+        this.KEYSTORE = keystore;
+        this.PWD = password;
+        this.PUB_KEY = pk;
+        this.MASTER_KEY = mk;      
     }
     
     @Override
@@ -81,67 +76,71 @@ public class ProxySSLServer implements Runnable{
                 DataOutputStream streamOut = new DataOutputStream(clientSocket.getOutputStream());
                 DataInputStream streamIn = new DataInputStream(new BufferedInputStream(clientSocket.getInputStream()));
                 
-                //Proxy Server receives code
-                String code = streamIn.readUTF();
-                System.out.println(code);
+                //Proxy Server receives initial message
+                String message = streamIn.readUTF();
+                System.out.println("Message received: " + message + "Preparing to re-encrypt...");
                 
-                if(code.equals("re-encrypt")){
+                if(message.equals("re-encrypt")){
                     //Proxy Server receives username
                     String username = streamIn.readUTF();
-                    System.out.println(username);
+                    System.out.println("Preparing to send files to " + username + "...");
 
                     //Proxy Server receives filename
                     String filename = streamIn.readUTF();
-                    System.out.println(filename);
+                    System.out.println("Preparing to send " + filename + "...");
 
                     //Proxy Server receives filesize
                     String line = streamIn.readUTF();
                     int filesize = Integer.parseInt(line);
-                    System.out.println("" + filesize);
+                    System.out.println("Preparing to send " + filesize + " bytes of data...");
 
                     //Proxy Server receives file
                     this.getFile(clientSocket, filename, filesize);
 
                     //Proxy Server initially creates proxy key with no revoked users
                     String [] init = {};
-                    cmd.revoke(filename + "_proxy_key", PUB_KEY.getAbsolutePath(), MASTER_KEY.getAbsolutePath(), init);
-                    cmd.convert(username + "lambda_k", PUB_KEY.getAbsolutePath(), filename, filename + "_proxy_key", username + ".id");
+                    cmd.revoke(filename + "_proxykey", PUB_KEY.getAbsolutePath(), MASTER_KEY.getAbsolutePath(), init);
+                    cmd.convert(username + "lambda_k", PUB_KEY.getAbsolutePath(), filename, filename + "_proxykey", username + ".id");
 
-                    File proxy_file = new File (filename + ".proxy");
+                    File proxyfile = new File (filename + ".proxy");
 
                     //Proxy Server sends proxy file size
-                    String proxy_filesize = "" + (int)proxy_file.length();
-                    streamOut.writeUTF(proxy_filesize);
+                    String proxyfilesize = "" + (int)proxyfile.length();
+                    streamOut.writeUTF(proxyfilesize);
                     streamOut.flush();
 
                     //Proxy Server sends proxy file name
-                    streamOut.writeUTF(proxy_file.getName());
+                    streamOut.writeUTF(proxyfile.getName());
                     streamOut.flush();
 
-                    this.sendFile(clientSocket, proxy_file);
-                    System.out.println(proxy_file.getName() + " successfully sent");
+                    this.sendFile(clientSocket, proxyfile);
+                    System.out.println(proxyfile.getName() + " successfully sent! "
+                            + "\n Preparing to shred files...");
+                    cmd.remove(proxyfile.getAbsolutePath());
+                    //cmd.remove(filename + "_proxykey");
                 } 
-                else if(code.equals("lambda-k")){
+                else if(message.equals("lambda-k")){
                     //Proxy Server receives username
                     String username = streamIn.readUTF();
-                    System.out.println(username);
+                    System.out.println("Preparing to send lambda_k to " + username + "...");
 
                     //Proxy Server receives filename
                     String filename = streamIn.readUTF();
-                    System.out.println(filename);
+                    System.out.println("Preparing to send " + filename + "...");
                     
-                    File lambda_k  = new File (username + "lambda_k");
+                    File lambdak  = new File (username + "lambda_k");
                     
                     //Proxy Server sends lambda file size
-                    String lambda_filesize = "" + (int)lambda_k.length();
-                    streamOut.writeUTF(lambda_filesize);
+                    String lambdafilesize = "" + (int)lambdak.length();
+                    streamOut.writeUTF(lambdafilesize);
                     streamOut.flush();
                     
                     //Proxy Server sends lambda_k name
-                    streamOut.writeUTF(lambda_k.getName());
+                    streamOut.writeUTF(lambdak.getName());
                     streamOut.flush();
 
-                    this.sendFile(clientSocket, lambda_k);
+                    this.sendFile(clientSocket, lambdak);
+                    cmd.remove(lambdak.getAbsolutePath());
                 }
             }
         } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException | UnrecoverableKeyException | KeyManagementException | NumberFormatException | CommandFailedException e) {
