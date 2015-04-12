@@ -80,7 +80,13 @@ public class ProxySSLServer implements Runnable{
                 String message = streamIn.readUTF();
                 System.out.println("Message received: " + message + "Preparing to re-encrypt...");
                 
-                if(message.equals("re-encrypt")){
+                if (message.equals("user-id")){
+                    String filename = streamIn.readUTF();
+                    String line = streamIn.readUTF();
+                    int filesize = Integer.parseInt(line);
+                    this.getFile(clientSocket, filename, filesize);
+                }
+                else if(message.equals("re-encrypt")){
                     //Proxy Server receives username
                     String username = streamIn.readUTF();
                     System.out.println("Preparing to send files to " + username + "...");

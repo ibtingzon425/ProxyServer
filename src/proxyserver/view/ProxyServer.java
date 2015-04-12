@@ -191,7 +191,7 @@ public class ProxyServer extends javax.swing.JFrame {
 
     private void StartServerActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_StartServerActionPerformed
         int portno = Integer.parseInt(port.getText());
-        ProxySSLServer server = new ProxySSLServer(portno, KeyStoreTextField.getText(), "password".toCharArray(), "pk", "mk");
+        ProxySSLServer server = new ProxySSLServer(portno, KeyStoreTextField.getText(), "password".toCharArray(), "pub_key", "master_key");
         StartServer.setEnabled(false);
         server_thread = new Thread(server, "Server");
         try{
